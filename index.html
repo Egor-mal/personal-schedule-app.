@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#6c5ce7" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Результат" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<link rel="icon" href="icon.svg" />
+<title>Результат — игровой планировщик</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-top">
+        <div class="brand">🏆 Результат</div>
+        <button id="notifBtn" class="icon-btn" title="Включить напоминания">🔔</button>
+      </div>
+      <div class="level-bar">
+        <div class="level-info">
+          <span id="levelLabel">Ур. 1</span>
+          <span id="xpLabel">0 / 100 XP</span>
+        </div>
+        <div class="xp-track"><div id="xpFill" class="xp-fill"></div></div>
+      </div>
+    </header>
+
+    <!-- Main views -->
+    <main id="views">
+
+      <!-- TODAY / TASKS -->
+      <section id="view-today" class="view active">
+        <div class="date-row">
+          <button id="prevDay" class="nav-arrow">‹</button>
+          <h2 id="todayTitle">Сегодня</h2>
+          <button id="nextDay" class="nav-arrow">›</button>
+        </div>
+
+        <div id="streakStrip" class="streak-strip"></div>
+
+        <div id="taskList" class="task-list"></div>
+
+        <button id="addTaskBtn" class="fab">+</button>
+      </section>
+
+      <!-- MEETINGS -->
+      <section id="view-meetings" class="view">
+        <h2>Встречи</h2>
+        <div id="meetingList" class="task-list"></div>
+        <button id="addMeetingBtn" class="fab">+</button>
+      </section>
+
+      <!-- CALENDAR -->
+      <section id="view-calendar" class="view">
+        <div class="cal-header">
+          <button id="prevMonth" class="nav-arrow">‹</button>
+          <h2 id="monthLabel">Месяц</h2>
+          <button id="nextMonth" class="nav-arrow">›</button>
+        </div>
+        <div class="cal-weekdays">
+          <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+        </div>
+        <div id="calGrid" class="cal-grid"></div>
+        <div class="legend" id="catLegend"></div>
+      </section>
+
+      <!-- CATEGORIES -->
+      <section id="view-categories" class="view">
+        <h2>Сферы жизни</h2>
+        <div id="catList" class="cat-list"></div>
+        <button id="addCatBtn" class="secondary-btn">+ Новая сфера</button>
+      </section>
+
+      <!-- PROFILE / ACHIEVEMENTS -->
+      <section id="view-profile" class="view">
+        <h2>Профиль</h2>
+        <div class="profile-card">
+          <div id="avatar" class="avatar">🧙</div>
+          <div>
+            <input type="text" id="profileNameInput" class="profile-name-input" placeholder="Ваше имя" />
+            <div id="profileLevel" class="profile-level">Уровень 1</div>
+            <div id="profileXp" class="profile-xp">0 XP</div>
+          </div>
+        </div>
+        <input type="file" id="photoInput" accept="image/*" class="hidden" />
+        <div class="profile-hint">Нажмите на аватар, чтобы загрузить фото</div>
+
+        <h3>Серии (streaks)</h3>
+        <div id="streakList" class="streak-list"></div>
+
+        <h3>Достижения</h3>
+        <div id="achList" class="ach-list"></div>
+
+        <h3>Будильник на телефоне</h3>
+        <button id="alarmSetupBtn" class="secondary-btn">📱 Как настроить будильник из приложения</button>
+        <div id="alarmSetupCard" class="share-card hidden"></div>
+      </section>
+
+    </main>
+
+    <!-- Bottom nav -->
+    <nav class="bottom-nav">
+      <button class="nav-btn active" data-view="view-today">
+        <span class="nav-icon">📋</span><span>Задачи</span>
+      </button>
+      <button class="nav-btn" data-view="view-meetings">
+        <span class="nav-icon">🤝</span><span>Встречи</span>
+      </button>
+      <button class="nav-btn" data-view="view-calendar">
+        <span class="nav-icon">📅</span><span>Календарь</span>
+      </button>
+      <button class="nav-btn" data-view="view-categories">
+        <span class="nav-icon">🗂️</span><span>Сферы</span>
+      </button>
+      <button class="nav-btn" data-view="view-profile">
+        <span class="nav-icon">🏆</span><span>Профиль</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Task modal -->
+  <div id="taskModal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="modalTitle">Новая задача</h3>
+      <label>Название</label>
+      <input type="text" id="taskTitleInput" placeholder="Например: Тренировка ног" />
+
+      <label>Комментарий</label>
+      <textarea id="taskCommentInput" rows="2" placeholder="Заметки, детали..."></textarea>
+
+      <label>Сфера</label>
+      <select id="taskCatSelect"></select>
+
+      <label>Дата</label>
+      <input type="date" id="taskDateInput" />
+
+      <label>Время (для напоминания)</label>
+      <input type="time" id="taskTimeInput" />
+
+      <label>Повтор</label>
+      <select id="taskRepeatSelect">
+        <option value="none">Без повтора</option>
+        <option value="daily">Каждый день</option>
+        <option value="weekly">Каждую неделю</option>
+      </select>
+
+      <label>Напомнить</label>
+      <select id="taskReminderSelect">
+        <option value="0">Во время напоминания</option>
+        <option value="5">За 5 минут</option>
+        <option value="10">За 10 минут</option>
+        <option value="30">За 30 минут</option>
+        <option value="60">За час</option>
+        <option value="1440">За день</option>
+      </select>
+
+      <label>Награда (XP)</label>
+      <input type="number" id="taskXpInput" value="10" min="1" max="100" />
+
+      <button id="setAlarmBtn" class="secondary-btn">📱 Поставить будильник на телефоне</button>
+
+      <div class="modal-actions">
+        <button id="deleteTaskBtn" class="danger-btn hidden">Удалить</button>
+        <button id="cancelTaskBtn" class="secondary-btn">Отмена</button>
+        <button id="saveTaskBtn" class="primary-btn">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Meeting modal -->
+  <div id="meetingModal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="meetingModalTitle">Новая встреча</h3>
+      <label>Название</label>
+      <input type="text" id="meetingTitleInput" placeholder="Например: Встреча с клиентом" />
+
+      <label>Комментарий</label>
+      <textarea id="meetingCommentInput" rows="2" placeholder="Заметки, детали..."></textarea>
+
+      <label>Дата</label>
+      <input type="date" id="meetingDateInput" />
+
+      <label>Время (для напоминания)</label>
+      <input type="time" id="meetingTimeInput" />
+
+      <label>Напомнить</label>
+      <select id="meetingReminderSelect">
+        <option value="0">Во время встречи</option>
+        <option value="5">За 5 минут</option>
+        <option value="10">За 10 минут</option>
+        <option value="30">За 30 минут</option>
+        <option value="60">За час</option>
+        <option value="1440">За день</option>
+      </select>
+
+      <label>Награда за выполнение (XP)</label>
+      <input type="number" id="meetingXpInput" value="15" min="1" max="100" />
+
+      <button id="setMeetingAlarmBtn" class="secondary-btn">📱 Поставить будильник на телефоне</button>
+
+      <div class="modal-actions">
+        <button id="deleteMeetingBtn" class="danger-btn hidden">Удалить</button>
+        <button id="cancelMeetingBtn" class="secondary-btn">Отмена</button>
+        <button id="saveMeetingBtn" class="primary-btn">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Category modal -->
+  <div id="catModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Новая сфера</h3>
+      <label>Название</label>
+      <input type="text" id="catNameInput" placeholder="Например: Учёба" />
+
+      <label>Иконка (эмодзи)</label>
+      <input type="text" id="catIconInput" placeholder="📚" maxlength="2" />
+
+      <label>Цвет</label>
+      <div id="colorPicker" class="color-picker"></div>
+
+      <div class="modal-actions">
+        <button id="cancelCatBtn" class="secondary-btn">Отмена</button>
+        <button id="saveCatBtn" class="primary-btn">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Level-up toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
