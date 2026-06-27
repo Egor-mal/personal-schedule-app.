@@ -19,7 +19,7 @@
     <!-- Header -->
     <header class="header">
       <div class="header-top">
-        <div class="brand">🏆 Результат</div>
+        <button id="brandBtn" class="brand">🏆 Результат</button>
         <button id="notifBtn" class="icon-btn" title="Включить напоминания">🔔</button>
       </div>
       <div class="level-bar">
@@ -36,22 +36,23 @@
 
       <!-- TODAY / TASKS -->
       <section id="view-today" class="view active">
-        <div class="date-row">
-          <button id="prevDay" class="nav-arrow">‹</button>
-          <h2 id="todayTitle">Сегодня</h2>
-          <button id="nextDay" class="nav-arrow">›</button>
+        <h2>Задачи</h2>
+        <div class="view-tabs">
+          <button class="view-tab active" data-tab="active" id="taskTabActive">Активные</button>
+          <button class="view-tab" data-tab="done" id="taskTabDone">Выполненные</button>
         </div>
-
         <div id="streakStrip" class="streak-strip"></div>
-
         <div id="taskList" class="task-list"></div>
-
         <button id="addTaskBtn" class="fab">+</button>
       </section>
 
       <!-- MEETINGS -->
       <section id="view-meetings" class="view">
         <h2>Встречи</h2>
+        <div class="view-tabs">
+          <button class="view-tab active" data-tab="active" id="meetingTabActive">Предстоящие</button>
+          <button class="view-tab" data-tab="done" id="meetingTabDone">Выполненные</button>
+        </div>
         <div id="meetingList" class="task-list"></div>
         <button id="addMeetingBtn" class="fab">+</button>
       </section>
@@ -70,11 +71,12 @@
         <div class="legend" id="catLegend"></div>
       </section>
 
-      <!-- CATEGORIES -->
-      <section id="view-categories" class="view">
-        <h2>Сферы жизни</h2>
-        <div id="catList" class="cat-list"></div>
-        <button id="addCatBtn" class="secondary-btn">+ Новая сфера</button>
+      <!-- NOTES -->
+      <section id="view-notes" class="view">
+        <h2>Заметки</h2>
+        <div id="noteFolderStrip" class="streak-strip"></div>
+        <div id="noteList" class="task-list"></div>
+        <button id="addNoteBtn" class="fab">+</button>
       </section>
 
       <!-- PROFILE / ACHIEVEMENTS -->
@@ -91,6 +93,10 @@
         <input type="file" id="photoInput" accept="image/*" class="hidden" />
         <div class="profile-hint">Нажмите на аватар, чтобы загрузить фото</div>
 
+        <h3>Сферы жизни</h3>
+        <div id="catList" class="cat-list"></div>
+        <button id="addCatBtn" class="secondary-btn">+ Новая сфера</button>
+
         <h3>Серии (streaks)</h3>
         <div id="streakList" class="streak-list"></div>
 
@@ -100,6 +106,14 @@
         <h3>Будильник на телефоне</h3>
         <button id="alarmSetupBtn" class="secondary-btn">📱 Как настроить будильник из приложения</button>
         <div id="alarmSetupCard" class="share-card hidden"></div>
+
+        <h3>Перенос данных</h3>
+        <button id="exportDataBtn" class="secondary-btn">📤 Экспортировать данные</button>
+        <button id="importDataBtn" class="secondary-btn">📥 Импортировать данные</button>
+        <div id="dataTransferCard" class="share-card hidden">
+          <textarea id="dataTransferArea" rows="6" placeholder="Здесь появится код для копирования"></textarea>
+          <button id="dataTransferActionBtn" class="primary-btn">Копировать</button>
+        </div>
       </section>
 
     </main>
@@ -115,11 +129,8 @@
       <button class="nav-btn" data-view="view-calendar">
         <span class="nav-icon">📅</span><span>Календарь</span>
       </button>
-      <button class="nav-btn" data-view="view-categories">
-        <span class="nav-icon">🗂️</span><span>Сферы</span>
-      </button>
-      <button class="nav-btn" data-view="view-profile">
-        <span class="nav-icon">🏆</span><span>Профиль</span>
+      <button class="nav-btn" data-view="view-notes">
+        <span class="nav-icon">📝</span><span>Заметки</span>
       </button>
     </nav>
   </div>
@@ -228,6 +239,47 @@
       <div class="modal-actions">
         <button id="cancelCatBtn" class="secondary-btn">Отмена</button>
         <button id="saveCatBtn" class="primary-btn">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Note modal -->
+  <div id="noteModal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="noteModalTitle">Новая заметка</h3>
+      <label>Заголовок</label>
+      <input type="text" id="noteTitleInput" placeholder="Например: Идеи для проекта" />
+
+      <label>Папка</label>
+      <select id="noteFolderSelect"></select>
+
+      <label>Текст</label>
+      <textarea id="noteContentInput" rows="6" placeholder="Текст заметки..."></textarea>
+
+      <div class="modal-actions">
+        <button id="deleteNoteBtn" class="danger-btn hidden">Удалить</button>
+        <button id="cancelNoteBtn" class="secondary-btn">Отмена</button>
+        <button id="saveNoteBtn" class="primary-btn">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Note folder modal -->
+  <div id="folderModal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="folderModalTitle">Новая папка</h3>
+      <label>Название</label>
+      <input type="text" id="folderNameInput" placeholder="Например: Идеи" />
+
+      <div id="folderOrderActions" class="modal-actions hidden">
+        <button id="folderToStartBtn" class="secondary-btn">⬅️ В начало</button>
+        <button id="folderToEndBtn" class="secondary-btn">В конец ➡️</button>
+      </div>
+
+      <div class="modal-actions">
+        <button id="deleteFolderBtn" class="danger-btn hidden">Удалить</button>
+        <button id="cancelFolderBtn" class="secondary-btn">Отмена</button>
+        <button id="saveFolderBtn" class="primary-btn">Сохранить</button>
       </div>
     </div>
   </div>

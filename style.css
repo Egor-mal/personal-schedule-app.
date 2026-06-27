@@ -52,6 +52,12 @@ html, body {
   font-size: 20px;
   font-weight: 700;
   letter-spacing: 0.5px;
+  background: none;
+  border: none;
+  color: var(--text);
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
 }
 .icon-btn {
   background: var(--bg-card);
@@ -122,6 +128,30 @@ h3 { font-size: 15px; margin: 18px 0 8px; color: var(--text-dim); text-transform
   cursor: pointer;
 }
 
+/* View tabs (Активные / Выполненные) */
+.view-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.view-tab {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--bg-card-2);
+  background: var(--bg-card);
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.view-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  font-weight: 500;
+}
+
 /* Streak strip */
 .streak-strip {
   display: flex;
@@ -150,6 +180,21 @@ h3 { font-size: 15px; margin: 18px 0 8px; color: var(--text-dim); text-transform
   color: white;
 }
 .streak-chip.selected .flame { color: white; }
+.streak-chip.add-chip {
+  border: 1px dashed var(--text-dim);
+  color: var(--text-dim);
+}
+
+/* Notes */
+.note-content {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 
 /* Task list */
 .task-list { display: flex; flex-direction: column; gap: 10px; padding-bottom: 80px; }

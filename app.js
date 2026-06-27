@@ -50,8 +50,11 @@ let calMonth = new Date();         // for calendar view
 let editingTaskId = null;
 let editingMeetingId = null;
 let editingCatId = null;
+let editingNoteId = null;
+let editingFolderId = null;
 let selectedCatColor = COLORS[0];
 let selectedCatFilter = null; // catId or null = show all
+let selectedNoteFolderFilter = null; // folderId or null = show all
 
 function todayStr(d = new Date()) {
   return formatDate(d);
@@ -75,22 +78,27 @@ function uid() {
   return Math.random().toString(36).slice(2,10);
 }
 
-function loadState() {
-  let data = null;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) data = JSON.parse(raw);
-  } catch(e) {}
-  const defaults = {
+function loadDefaults() {
+  return {
     categories: DEFAULT_CATEGORIES.map(c => ({...c})),
     tasks: [],
     meetings: [],
+    notes: [],
+    noteFolders: [],
     xp: 0,
     level: 1,
     unlockedAchievements: [],
     profileName: "",
     profilePhoto: "",
   };
+}
+function loadState() {
+  let data = null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) data = JSON.parse(raw);
+  } catch(e) {}
+  const defaults = loadDefaults();
   return data ? Object.assign(defaults, data) : defaults;
 }
 function saveState() {
@@ -211,90 +219,118 @@ function showToast(msg) {
 }
 
 /* ---------------------- Navigation ---------------------- */
+function switchView(viewId) {
+  document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  const btn = document.querySelector(`.nav-btn[data-view="${viewId}"]`);
+  if (btn) btn.classList.add("active");
+  document.getElementById(viewId).classList.add("active");
+  if (viewId === "view-calendar") renderCalendar();
+  if (viewId === "view-profile") { renderProfile(); renderCategories(); }
+  if (viewId === "view-meetings") renderMeetings();
+  if (viewId === "view-notes") renderNotes();
+}
+
 document.querySelectorAll(".nav-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
-    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
-    btn.classList.add("active");
-    document.getElementById(btn.dataset.view).classList.add("active");
-    if (btn.dataset.view === "view-calendar") renderCalendar();
-    if (btn.dataset.view === "view-categories") renderCategories();
-    if (btn.dataset.view === "view-profile") renderProfile();
-    if (btn.dataset.view === "view-meetings") renderMeetings();
-  });
+  btn.addEventListener("click", () => switchView(btn.dataset.view));
 });
+
+document.getElementById("brandBtn").addEventListener("click", () => switchView("view-profile"));
 
 /* ---------------------- Today view ---------------------- */
-document.getElementById("prevDay").addEventListener("click", () => {
-  currentDate = addDays(currentDate, -1);
-  renderToday();
-});
-document.getElementById("nextDay").addEventListener("click", () => {
-  currentDate = addDays(currentDate, 1);
-  renderToday();
-});
+let taskTab = "active";
+let meetingTab = "active";
+
+document.getElementById("taskTabActive").addEventListener("click", () => { taskTab = "active"; renderToday(); });
+document.getElementById("taskTabDone").addEventListener("click", () => { taskTab = "done"; renderToday(); });
+document.getElementById("meetingTabActive").addEventListener("click", () => { meetingTab = "active"; renderMeetings(); });
+document.getElementById("meetingTabDone").addEventListener("click", () => { meetingTab = "done"; renderMeetings(); });
+
+function setTaskTab(tab) {
+  taskTab = tab;
+  document.getElementById("taskTabActive").classList.toggle("active", tab === "active");
+  document.getElementById("taskTabDone").classList.toggle("active", tab === "done");
+}
+function setMeetingTab(tab) {
+  meetingTab = tab;
+  const ma = document.getElementById("meetingTabActive");
+  const md = document.getElementById("meetingTabDone");
+  if (ma) ma.classList.toggle("active", tab === "active");
+  if (md) md.classList.toggle("active", tab === "done");
+}
 
 function renderToday() {
-  const dateStr = todayStr(currentDate);
-  const isToday = dateStr === todayStr();
-  const title = document.getElementById("todayTitle");
-  if (isToday) {
-    title.textContent = "Сегодня";
-  } else {
-    title.textContent = currentDate.toLocaleDateString("ru-RU", { day: "numeric", month: "long", weekday: "short" });
-  }
+  setTaskTab(taskTab);
 
-  // streak strip (also acts as category filter)
+  const today = todayStr();
+
+  // Category filter strip (active tab only)
   const strip = document.getElementById("streakStrip");
   strip.innerHTML = "";
-  state.categories.forEach(cat => {
-    const streak = computeStreak(cat.id, dateStr);
-    const chip = document.createElement("div");
-    chip.className = "streak-chip" + (streak > 0 ? " on" : "") + (selectedCatFilter === cat.id ? " selected" : "");
-    chip.innerHTML = `<span>${cat.icon}</span><span>${cat.name}</span><span class="flame">${streak > 0 ? "🔥 " + streak : "—"}</span>`;
-    chip.addEventListener("click", () => {
-      selectedCatFilter = selectedCatFilter === cat.id ? null : cat.id;
-      renderToday();
+  if (taskTab === "active") {
+    state.categories.forEach(cat => {
+      const streak = computeStreak(cat.id);
+      const chip = document.createElement("div");
+      chip.className = "streak-chip" + (streak > 0 ? " on" : "") + (selectedCatFilter === cat.id ? " selected" : "");
+      chip.innerHTML = `<span>${escapeHtml(cat.icon)}</span><span>${escapeHtml(cat.name)}</span><span class="flame">${streak > 0 ? "🔥 " + streak : "—"}</span>`;
+      chip.addEventListener("click", () => {
+        selectedCatFilter = selectedCatFilter === cat.id ? null : cat.id;
+        renderToday();
+      });
+      strip.appendChild(chip);
     });
-    strip.appendChild(chip);
-  });
+  }
 
-  // task list
+  // Build task list
   const list = document.getElementById("taskList");
   list.innerHTML = "";
-  let tasks = tasksForDate(dateStr);
-  if (selectedCatFilter) {
-    tasks = tasks.filter(t => t.catId === selectedCatFilter);
+
+  let tasks;
+  if (taskTab === "active") {
+    tasks = state.tasks.filter(t => {
+      if (t.repeat !== "none") return taskOccursOn(t, today) && !isTaskDone(t, today);
+      return !isTaskDone(t, t.date);
+    });
+    tasks.sort((a,b) => (a.date + (a.time||"99:99")).localeCompare(b.date + (b.time||"99:99")));
+  } else {
+    tasks = state.tasks.filter(t => {
+      if (t.repeat !== "none") return isTaskDone(t, today);
+      return isTaskDone(t, t.date);
+    });
+    tasks.sort((a,b) => (b.date + (b.time||"99:99")).localeCompare(a.date + (a.time||"99:99")));
   }
-  // sort by time
-  tasks.sort((a,b) => (a.time || "99:99").localeCompare(b.time || "99:99"));
 
-  const meetings = selectedCatFilter ? [] : meetingsForDate(dateStr).sort((a,b) => (a.time || "99:99").localeCompare(b.time || "99:99"));
+  if (selectedCatFilter) tasks = tasks.filter(t => t.catId === selectedCatFilter);
 
-  if (tasks.length === 0 && meetings.length === 0) {
+  if (tasks.length === 0) {
     const cat = state.categories.find(c => c.id === selectedCatFilter);
-    list.innerHTML = selectedCatFilter
-      ? `<div class="empty-state">Нет задач по сфере «${cat ? cat.icon + " " + cat.name : ""}» на этот день.</div>`
-      : `<div class="empty-state">Нет задач на этот день.<br>Нажмите «+», чтобы добавить квест ✨</div>`;
+    list.innerHTML = taskTab === "active"
+      ? (selectedCatFilter
+          ? `<div class="empty-state">Нет активных задач по сфере «${escapeHtml(cat ? cat.icon + " " + cat.name : "")}».</div>`
+          : `<div class="empty-state">Нет активных задач.<br>Нажмите «+», чтобы добавить ✨</div>`)
+      : `<div class="empty-state">Нет выполненных задач.</div>`;
     return;
   }
 
   tasks.forEach(task => {
     const cat = state.categories.find(c => c.id === task.catId) || { name: "—", icon: "❔", color: "#999" };
-    const done = isTaskDone(task, dateStr);
+    const dateKey = task.repeat !== "none" ? today : task.date;
+    const done = isTaskDone(task, dateKey);
 
     const card = document.createElement("div");
     card.className = "task-card" + (done ? " done" : "");
     card.style.borderLeftColor = cat.color;
 
+    const showDate = task.date !== today;
     card.innerHTML = `
       <button class="task-checkbox">${done ? "✓" : ""}</button>
       <div class="task-body">
         <div class="task-title">${escapeHtml(task.title)}</div>
         ${task.comment ? `<div class="task-comment">${escapeHtml(task.comment)}</div>` : ""}
         <div class="task-meta">
+          ${showDate ? `<span>📅 ${task.date}</span>` : ""}
           ${task.time ? `<span>⏰ ${task.time}</span>` : ""}
-          <span class="task-cat-badge" style="background:${cat.color}33;color:${cat.color}">${cat.icon} ${cat.name}</span>
+          <span class="task-cat-badge" style="background:${cat.color}33;color:${cat.color}">${escapeHtml(cat.icon)} ${escapeHtml(cat.name)}</span>
           <span class="task-xp">+${task.xp} XP</span>
         </div>
       </div>
@@ -302,14 +338,10 @@ function renderToday() {
 
     card.querySelector(".task-checkbox").addEventListener("click", (e) => {
       e.stopPropagation();
-      toggleTaskDone(task, dateStr);
+      toggleTaskDone(task, dateKey);
     });
     card.addEventListener("click", () => openTaskModal(task));
     list.appendChild(card);
-  });
-
-  meetings.forEach(meeting => {
-    list.appendChild(createMeetingCard(meeting, dateStr));
   });
 }
 
@@ -325,6 +357,7 @@ function toggleTaskDone(task, dateStr) {
   }
   saveState();
   renderToday();
+  renderCalendar();
 }
 
 function escapeHtml(str) {
@@ -396,11 +429,7 @@ function renderCalendar() {
     cell.innerHTML = `<span>${day}</span><div class="dots">${dotsHtml}</div>`;
     cell.addEventListener("click", () => {
       currentDate = date;
-      // switch to today view
-      document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
-      document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
-      document.querySelector('.nav-btn[data-view="view-today"]').classList.add("active");
-      document.getElementById("view-today").classList.add("active");
+      switchView("view-today");
       renderToday();
     });
     grid.appendChild(cell);
@@ -409,7 +438,7 @@ function renderCalendar() {
   // legend
   const legend = document.getElementById("catLegend");
   legend.innerHTML = state.categories.map(c =>
-    `<div class="legend-item"><span class="legend-dot" style="background:${c.color}"></span>${c.icon} ${c.name}</div>`
+    `<div class="legend-item"><span class="legend-dot" style="background:${c.color}"></span>${escapeHtml(c.icon)} ${escapeHtml(c.name)}</div>`
   ).join("") + `<div class="legend-item"><span class="legend-dot" style="background:${MEETING_COLOR}"></span>🤝 Встречи</div>`;
 }
 
@@ -423,7 +452,7 @@ function renderCategories() {
     const card = document.createElement("div");
     card.className = "cat-card";
     card.innerHTML = `
-      <div class="cat-icon" style="background:${cat.color}33;color:${cat.color}">${cat.icon}</div>
+      <div class="cat-icon" style="background:${cat.color}33;color:${cat.color}">${escapeHtml(cat.icon)}</div>
       <div class="cat-info">
         <div class="cat-name">${escapeHtml(cat.name)}</div>
         <div class="cat-stats">${total} задач(и) · 🔥 серия ${streak} дн.</div>
@@ -517,6 +546,176 @@ function renderColorPicker() {
     picker.appendChild(sw);
   });
 }
+
+/* ---------------------- Notes ---------------------- */
+const noteModal = document.getElementById("noteModal");
+const folderModal = document.getElementById("folderModal");
+
+function renderNoteFolderStrip() {
+  const strip = document.getElementById("noteFolderStrip");
+  strip.innerHTML = "";
+
+  const allChip = document.createElement("div");
+  allChip.className = "streak-chip" + (selectedNoteFolderFilter === null ? " selected" : "");
+  allChip.innerHTML = `<span>🗒️</span><span>Все</span>`;
+  allChip.addEventListener("click", () => {
+    selectedNoteFolderFilter = null;
+    renderNotes();
+  });
+  strip.appendChild(allChip);
+
+  state.noteFolders.forEach(folder => {
+    const count = state.notes.filter(n => n.folderId === folder.id).length;
+    const chip = document.createElement("div");
+    chip.className = "streak-chip" + (selectedNoteFolderFilter === folder.id ? " selected" : "");
+    chip.innerHTML = `<span>📁</span><span>${escapeHtml(folder.name)}</span><span class="flame">${count}</span>`;
+    chip.addEventListener("click", () => {
+      selectedNoteFolderFilter = selectedNoteFolderFilter === folder.id ? null : folder.id;
+      renderNotes();
+    });
+    chip.addEventListener("dblclick", () => openFolderModal(folder));
+    strip.appendChild(chip);
+  });
+
+  const addChip = document.createElement("div");
+  addChip.className = "streak-chip add-chip";
+  addChip.innerHTML = `<span>+</span><span>Папка</span>`;
+  addChip.addEventListener("click", () => openFolderModal(null));
+  strip.appendChild(addChip);
+}
+
+function renderNotes() {
+  renderNoteFolderStrip();
+
+  const list = document.getElementById("noteList");
+  list.innerHTML = "";
+
+  let notes = [...state.notes];
+  if (selectedNoteFolderFilter) {
+    notes = notes.filter(n => n.folderId === selectedNoteFolderFilter);
+  }
+  notes.sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+  if (notes.length === 0) {
+    list.innerHTML = `<div class="empty-state">Нет заметок.<br>Нажмите «+», чтобы добавить заметку 📝</div>`;
+    return;
+  }
+
+  notes.forEach(note => {
+    const folder = state.noteFolders.find(f => f.id === note.folderId);
+    const card = document.createElement("div");
+    card.className = "task-card";
+    card.style.borderLeftColor = "#fdcb6e";
+    card.innerHTML = `
+      <div class="task-body">
+        <div class="task-title">${escapeHtml(note.title || "Без названия")}</div>
+        ${note.content ? `<div class="note-content">${escapeHtml(note.content)}</div>` : ""}
+        ${folder ? `<div class="task-meta"><span class="task-cat-badge">📁 ${escapeHtml(folder.name)}</span></div>` : ""}
+      </div>
+    `;
+    card.addEventListener("click", () => openNoteModal(note));
+    list.appendChild(card);
+  });
+}
+
+document.getElementById("addNoteBtn").addEventListener("click", () => openNoteModal(null));
+
+function populateNoteFolderSelect() {
+  const select = document.getElementById("noteFolderSelect");
+  select.innerHTML = `<option value="">Без папки</option>` +
+    state.noteFolders.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join("");
+}
+
+function openNoteModal(note) {
+  editingNoteId = note ? note.id : null;
+  document.getElementById("noteModalTitle").textContent = note ? "Редактировать заметку" : "Новая заметка";
+  document.getElementById("noteTitleInput").value = note ? note.title : "";
+  populateNoteFolderSelect();
+  document.getElementById("noteFolderSelect").value = note ? (note.folderId || "") : (selectedNoteFolderFilter || "");
+  document.getElementById("noteContentInput").value = note ? (note.content || "") : "";
+  document.getElementById("deleteNoteBtn").classList.toggle("hidden", !note);
+  noteModal.classList.remove("hidden");
+}
+
+document.getElementById("cancelNoteBtn").addEventListener("click", () => noteModal.classList.add("hidden"));
+
+document.getElementById("saveNoteBtn").addEventListener("click", () => {
+  const title = document.getElementById("noteTitleInput").value.trim();
+  const content = document.getElementById("noteContentInput").value.trim();
+  if (!title && !content) { alert("Введите заголовок или текст заметки"); return; }
+  const folderId = document.getElementById("noteFolderSelect").value || null;
+
+  if (editingNoteId) {
+    const note = state.notes.find(n => n.id === editingNoteId);
+    Object.assign(note, { title, content, folderId, updatedAt: Date.now() });
+  } else {
+    state.notes.push({ id: uid(), title, content, folderId, updatedAt: Date.now() });
+  }
+  saveState();
+  noteModal.classList.add("hidden");
+  renderNotes();
+});
+
+document.getElementById("deleteNoteBtn").addEventListener("click", () => {
+  if (!editingNoteId) return;
+  if (!confirm("Удалить эту заметку?")) return;
+  state.notes = state.notes.filter(n => n.id !== editingNoteId);
+  saveState();
+  noteModal.classList.add("hidden");
+  renderNotes();
+});
+
+/* ---------------------- Note folders ---------------------- */
+function openFolderModal(folder) {
+  editingFolderId = folder ? folder.id : null;
+  document.getElementById("folderModalTitle").textContent = folder ? "Редактировать папку" : "Новая папка";
+  document.getElementById("folderNameInput").value = folder ? folder.name : "";
+  document.getElementById("deleteFolderBtn").classList.toggle("hidden", !folder);
+  document.getElementById("folderOrderActions").classList.toggle("hidden", !folder || state.noteFolders.length < 2);
+  folderModal.classList.remove("hidden");
+}
+
+function moveFolder(folderId, toEnd) {
+  const idx = state.noteFolders.findIndex(f => f.id === folderId);
+  if (idx === -1) return;
+  const [folder] = state.noteFolders.splice(idx, 1);
+  if (toEnd) state.noteFolders.push(folder);
+  else state.noteFolders.unshift(folder);
+  saveState();
+  folderModal.classList.add("hidden");
+  renderNotes();
+}
+
+document.getElementById("folderToStartBtn").addEventListener("click", () => moveFolder(editingFolderId, false));
+document.getElementById("folderToEndBtn").addEventListener("click", () => moveFolder(editingFolderId, true));
+
+document.getElementById("cancelFolderBtn").addEventListener("click", () => folderModal.classList.add("hidden"));
+
+document.getElementById("saveFolderBtn").addEventListener("click", () => {
+  const name = document.getElementById("folderNameInput").value.trim();
+  if (!name) { alert("Введите название папки"); return; }
+
+  if (editingFolderId) {
+    const folder = state.noteFolders.find(f => f.id === editingFolderId);
+    Object.assign(folder, { name });
+  } else {
+    state.noteFolders.push({ id: uid(), name });
+  }
+  saveState();
+  folderModal.classList.add("hidden");
+  renderNotes();
+});
+
+document.getElementById("deleteFolderBtn").addEventListener("click", () => {
+  if (!editingFolderId) return;
+  if (!confirm("Удалить эту папку? Заметки останутся, но без папки.")) return;
+  state.notes.forEach(n => { if (n.folderId === editingFolderId) n.folderId = null; });
+  state.noteFolders = state.noteFolders.filter(f => f.id !== editingFolderId);
+  if (selectedNoteFolderFilter === editingFolderId) selectedNoteFolderFilter = null;
+  saveState();
+  folderModal.classList.add("hidden");
+  renderNotes();
+});
 
 /* ---------------------- Task modal ---------------------- */
 const taskModal = document.getElementById("taskModal");
@@ -663,19 +862,25 @@ function createMeetingCard(meeting, dateStr) {
 }
 
 function renderMeetings() {
+  setMeetingTab(meetingTab);
   const list = document.getElementById("meetingList");
   list.innerHTML = "";
 
-  const sorted = [...state.meetings]
-    .filter(meetingVisibleInList)
-    .sort((a,b) => {
-      const da = a.date + " " + (a.time || "00:00");
-      const db = b.date + " " + (b.time || "00:00");
-      return da.localeCompare(db);
-    });
+  let sorted;
+  if (meetingTab === "active") {
+    sorted = [...state.meetings]
+      .filter(meetingVisibleInList)
+      .sort((a,b) => (a.date + (a.time||"00:00")).localeCompare(b.date + (b.time||"00:00")));
+  } else {
+    sorted = [...state.meetings]
+      .filter(m => m.repeat === "none" && isMeetingDone(m, m.date))
+      .sort((a,b) => (b.date + (b.time||"00:00")).localeCompare(a.date + (a.time||"00:00")));
+  }
 
   if (sorted.length === 0) {
-    list.innerHTML = `<div class="empty-state">Нет встреч.<br>Нажмите «+», чтобы добавить встречу 🤝</div>`;
+    list.innerHTML = meetingTab === "active"
+      ? `<div class="empty-state">Нет встреч.<br>Нажмите «+», чтобы добавить встречу 🤝</div>`
+      : `<div class="empty-state">Нет выполненных встреч.</div>`;
     return;
   }
 
@@ -746,7 +951,8 @@ document.getElementById("setMeetingAlarmBtn").addEventListener("click", () => {
 /* ---------------------- Profile / Achievements ---------------------- */
 function renderProfile() {
   const avatar = document.getElementById("avatar");
-  avatar.innerHTML = state.profilePhoto ? `<img src="${state.profilePhoto}" alt="avatar">` : "🧙";
+  const safePhoto = state.profilePhoto && /^data:image\//.test(state.profilePhoto) ? state.profilePhoto : null;
+  avatar.innerHTML = safePhoto ? `<img src="${safePhoto}" alt="avatar">` : "🧙";
 
   const nameInput = document.getElementById("profileNameInput");
   if (document.activeElement !== nameInput) {
@@ -844,6 +1050,52 @@ document.getElementById("alarmSetupBtn").addEventListener("click", () => {
   card.classList.remove("hidden");
 });
 
+/* ---------------------- Data export / import ---------------------- */
+document.getElementById("exportDataBtn").addEventListener("click", () => {
+  const card = document.getElementById("dataTransferCard");
+  const area = document.getElementById("dataTransferArea");
+  const actionBtn = document.getElementById("dataTransferActionBtn");
+  area.value = JSON.stringify(state);
+  area.readOnly = true;
+  actionBtn.textContent = "Скопировать в буфер";
+  actionBtn.onclick = () => {
+    area.select();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(area.value).then(() => showToast("📋 Скопировано")).catch(() => {
+        document.execCommand("copy");
+        showToast("📋 Скопировано");
+      });
+    } else {
+      document.execCommand("copy");
+      showToast("📋 Скопировано");
+    }
+  };
+  card.classList.remove("hidden");
+});
+
+document.getElementById("importDataBtn").addEventListener("click", () => {
+  const card = document.getElementById("dataTransferCard");
+  const area = document.getElementById("dataTransferArea");
+  const actionBtn = document.getElementById("dataTransferActionBtn");
+  area.value = "";
+  area.readOnly = false;
+  area.placeholder = "Вставьте сюда скопированный код";
+  actionBtn.textContent = "Загрузить данные";
+  actionBtn.onclick = () => {
+    try {
+      const data = JSON.parse(area.value);
+      state = Object.assign(loadDefaults(), data);
+      saveState();
+      init();
+      card.classList.add("hidden");
+      showToast("✅ Данные импортированы");
+    } catch (e) {
+      alert("Не удалось прочитать данные. Проверьте, что код скопирован полностью.");
+    }
+  };
+  card.classList.remove("hidden");
+});
+
 /* ---------------------- Notifications ---------------------- */
 const notifBtn = document.getElementById("notifBtn");
 
@@ -922,6 +1174,24 @@ function scheduleNotifications() {
 }
 
 /* ---------------------- Init ---------------------- */
+function autoRollover() {
+  const today = todayStr();
+  let changed = false;
+  state.tasks.forEach(t => {
+    if (t.repeat === "none" && !t.done && t.date < today) {
+      t.date = today;
+      changed = true;
+    }
+  });
+  state.meetings.forEach(m => {
+    if (m.repeat === "none" && !isMeetingDone(m, m.date) && m.date < today) {
+      m.date = today;
+      changed = true;
+    }
+  });
+  if (changed) saveState();
+}
+
 function init() {
   populateCatSelect();
   document.getElementById("taskDateInput").value = todayStr();
@@ -934,8 +1204,10 @@ function init() {
   updateNotifBtn();
   scheduleNotifications();
 
-  // re-render at midnight rollover
   setInterval(() => {
+    renderToday();
+    renderMeetings();
+    renderCalendar();
     scheduleNotifications();
   }, 60 * 1000);
 }
