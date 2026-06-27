@@ -175,6 +175,7 @@ h3 { font-size: 15px; margin: 18px 0 8px; color: var(--text-dim); text-transform
 }
 .streak-chip .flame { font-size: 14px; }
 .streak-chip.on { border-color: var(--orange); box-shadow: 0 0 10px rgba(255,180,84,0.25); }
+.streak-chip.has-active { border-color: var(--orange); box-shadow: 0 0 10px rgba(255,180,84,0.5); }
 .streak-chip.selected {
   background: var(--accent);
   color: white;

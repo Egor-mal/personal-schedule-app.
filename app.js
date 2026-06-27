@@ -270,8 +270,11 @@ function renderToday() {
   if (taskTab === "active") {
     state.categories.forEach(cat => {
       const streak = computeStreak(cat.id);
+      const catTasks = state.tasks.filter(t => t.catId === cat.id && (t.repeat !== "none" ? taskOccursOn(t, today) : true));
+      const hasActive = catTasks.some(t => !isTaskDone(t, t.repeat !== "none" ? today : t.date));
+      const allDone = catTasks.length > 0 && !hasActive;
       const chip = document.createElement("div");
-      chip.className = "streak-chip" + (streak > 0 ? " on" : "") + (selectedCatFilter === cat.id ? " selected" : "");
+      chip.className = "streak-chip" + (streak > 0 ? " on" : "") + (selectedCatFilter === cat.id ? " selected" : "") + (hasActive ? " has-active" : "") + (allDone ? " all-done-cat" : "");
       chip.innerHTML = `<span>${escapeHtml(cat.icon)}</span><span>${escapeHtml(cat.name)}</span><span class="flame">${streak > 0 ? "🔥 " + streak : "—"}</span>`;
       chip.addEventListener("click", () => {
         selectedCatFilter = selectedCatFilter === cat.id ? null : cat.id;
@@ -321,14 +324,13 @@ function renderToday() {
     card.className = "task-card" + (done ? " done" : "");
     card.style.borderLeftColor = cat.color;
 
-    const showDate = task.date !== today;
     card.innerHTML = `
       <button class="task-checkbox">${done ? "✓" : ""}</button>
       <div class="task-body">
         <div class="task-title">${escapeHtml(task.title)}</div>
         ${task.comment ? `<div class="task-comment">${escapeHtml(task.comment)}</div>` : ""}
         <div class="task-meta">
-          ${showDate ? `<span>📅 ${task.date}</span>` : ""}
+          <span>📅 ${task.date}</span>
           ${task.time ? `<span>⏰ ${task.time}</span>` : ""}
           <span class="task-cat-badge" style="background:${cat.color}33;color:${cat.color}">${escapeHtml(cat.icon)} ${escapeHtml(cat.name)}</span>
           <span class="task-xp">+${task.xp} XP</span>
@@ -823,7 +825,7 @@ function toggleMeetingDone(meeting, dateStr) {
 // completed one-off meetings are dropped once their date is in the past.
 function meetingVisibleInList(meeting) {
   if (meeting.repeat !== "none") return true;
-  if (meeting.date < todayStr() && isMeetingDone(meeting, meeting.date)) return false;
+  if (isMeetingDone(meeting, meeting.date)) return false;
   return true;
 }
 
