@@ -270,11 +270,13 @@ function renderToday() {
   if (taskTab === "active") {
     state.categories.forEach(cat => {
       const streak = computeStreak(cat.id);
-      const catTasks = state.tasks.filter(t => t.catId === cat.id && (t.repeat !== "none" ? taskOccursOn(t, today) : true));
-      const hasActive = catTasks.some(t => !isTaskDone(t, t.repeat !== "none" ? today : t.date));
-      const allDone = catTasks.length > 0 && !hasActive;
+      const hasActive = state.tasks.some(t => {
+        if (t.catId !== cat.id) return false;
+        if (t.repeat !== "none") return taskOccursOn(t, today) && !isTaskDone(t, today);
+        return !isTaskDone(t, t.date);
+      });
       const chip = document.createElement("div");
-      chip.className = "streak-chip" + (streak > 0 ? " on" : "") + (selectedCatFilter === cat.id ? " selected" : "") + (hasActive ? " has-active" : "") + (allDone ? " all-done-cat" : "");
+      chip.className = "streak-chip" + (selectedCatFilter === cat.id ? " selected" : "") + (hasActive ? " has-active" : "");
       chip.innerHTML = `<span>${escapeHtml(cat.icon)}</span><span>${escapeHtml(cat.name)}</span><span class="flame">${streak > 0 ? "🔥 " + streak : "—"}</span>`;
       chip.addEventListener("click", () => {
         selectedCatFilter = selectedCatFilter === cat.id ? null : cat.id;
